@@ -4,10 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
+  <link rel="icon" href="files/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <title>Mi agenda</title>
 </head>
 <body>
 
+<div class="sm-logo-wrap">
+  <img class="sm-logo" src="files/logon.png" alt="Logo">
+</div>
 <div class="smc-wrap">
   <div class="smc-card">
     <h2 class="smc-title">Agenda del consultor</h2>
@@ -59,6 +66,24 @@
   </div>
 </div>
 <style>
+:root{
+  font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+.sm-logo-wrap{
+  text-align:center;
+  margin:16px 0;
+}
+.sm-logo{
+  max-width:120px;
+  width:100%;
+  height:auto;
+}
+body{
+  margin:0;
+  font-family:inherit;
+  -webkit-font-smoothing:antialiased;
+  background:#F5F5F7;
+}
 /* ===== Calendario Reprogramar – Consultores ===== */
 .sm-rp-cal {
   font-family: inherit;
@@ -539,7 +564,7 @@
   // - Este es el backend principal que recibe los datos del front.
   // - Nota: aunque copies el código a tu PC, esta URL sigue apuntando al despliegue en Google.
   // - Código fuente (copia local para editar/analizar con Codex): /apps-script/code.gs
-  const ENDPOINT = "https://script.google.com/macros/s/AKfycbxUBDt0k5-fAtLm9yVSSWmgVX3HqlqiJ0ADruTIdTkBbs86UZBjQmMkHJy4vOtuxexw/exec";
+  const ENDPOINT = "https://script.google.com/macros/s/AKfycbyJvUfgU2-i3RxZ3vHDfi2HKRf8YtIeA3_HJpqt88I_b8yj03pbUMH4dMPR9Z2eVQ91/exec";
 
   const qs  = s => document.querySelector(s);
   const qsa = s => Array.from(document.querySelectorAll(s));
@@ -654,6 +679,13 @@
     return res.json();
   }
 
+  async function apiGetConsultores(){
+    const url = ENDPOINT+"?mode=consultores&_="+Date.now();
+    const res = await fetch(url, {cache:"no-store"});
+    if (!res.ok) throw new Error("consultores "+res.status);
+    return res.json();
+  }
+
   async function apiSlots(consultor_id, fecha){
     const url = ENDPOINT+"?mode=slots"
       +"&consultor="+encodeURIComponent(consultor_id)
@@ -706,6 +738,7 @@
 
   // ===== Estado global =====
   let CONSULTOR_ID = null;
+  let CONSULTOR_DAYS_LIMIT = null;
   let currentReprogBooking = null;
 
   // ===== Reprogramar: estado =====
@@ -713,12 +746,21 @@
     inited: false,
     today: null,
     days_ahead_max: 90,
+    global_days_ahead_max: 90,
     consultorId: null,
     currentMonth: null,
     availableDays: {},
     selectedDate: null,
     selectedTime: null
   };
+
+  function consultorCapDays(){
+    const base = rpState.global_days_ahead_max || 90;
+    if (CONSULTOR_DAYS_LIMIT == null) return base;
+    const n = Number(CONSULTOR_DAYS_LIMIT);
+    if (!Number.isFinite(n) || n < 1) return base;
+    return Math.min(base, Math.floor(n));
+  }
 
   function rpBuildMonthKey(d){
     return d.getFullYear()+"-"+pad2(d.getMonth()+1);
@@ -841,7 +883,7 @@
     btnNext.addEventListener("click", ()=>{
       const today = new Date(rpState.today);
       const maxDate = new Date(today.getTime());
-      maxDate.setDate(maxDate.getDate() + rpState.days_ahead_max);
+      maxDate.setDate(maxDate.getDate() + Math.max(rpState.days_ahead_max - 1, 0));
       const maxMonth = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
       const next = new Date(rpState.currentMonth.getFullYear(), rpState.currentMonth.getMonth()+1, 1);
       if (next > maxMonth) return;
@@ -932,9 +974,12 @@
         const init = await apiInitBooking();
         if (!init.ok) throw new Error("init_booking_error");
         rpState.today = init.today;
-        rpState.days_ahead_max = init.days_ahead_max || 90;
+        rpState.global_days_ahead_max = init.days_ahead_max || 90;
+        rpState.days_ahead_max = rpState.global_days_ahead_max;
         rpState.inited = true;
       }
+
+      rpState.days_ahead_max = consultorCapDays();
 
       const todayDate = new Date(rpState.today);
       rpState.currentMonth = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1);
@@ -973,6 +1018,10 @@
           ? "Ese horario se ocupó justo ahora."
           : data.error === "too_soon"
           ? "La hora no cumple la regla de anticipación."
+          : data.error === "too_far_consultor"
+          ? "Esa fecha está fuera del rango permitido."
+          : data.error === "no_consultor_for_date"
+          ? "No hay consultores disponibles para esa fecha."
           : "No se pudo reprogramar.";
         toast(msg);
         return;
@@ -1257,6 +1306,22 @@
       rpModal.querySelector("#smc-rp-confirm")
         ?.addEventListener("click", onConfirmReprog);
     }
+
+    // Carga límite de días (para reprogramar)
+    apiGetConsultores()
+      .then(data=>{
+        if (!data || !data.ok) return;
+        const c = (data.consultores || []).find(
+          x => String(x.consultor_id || "").trim() === String(CONSULTOR_ID)
+        );
+        if (c && c.days_ahead_limit != null){
+          const n = Number(c.days_ahead_limit);
+          if (Number.isFinite(n) && n > 0){
+            CONSULTOR_DAYS_LIMIT = Math.floor(n);
+          }
+        }
+      })
+      .catch(()=>{});
 
     // Carga inicial
     reloadBookings();

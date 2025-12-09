@@ -4,9 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
-  <title></title>
+  <link rel="icon" href="files/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <title>Agenda</title>
 </head>
 <body>
+<div class="sm-logo-wrap">
+  <img class="sm-logo" src="files/logon.png" alt="Logo">
+</div>
 <div class="sm-sched-wrap">
   <div class="sm-sched-card">
     <h2 class="sm-title">Agenda tu reunión</h2>
@@ -19,11 +26,11 @@
       </label>
     </div>
     <div class="sm-grid">
-      <div>
+      <div class="sm-col sm-col-left">
         <div class="sm-subtitle">Fecha</div>
         <div id="sm-calendar" class="sm-cal"></div>
       </div>
-      <div>
+      <div class="sm-col sm-col-right">
         <div class="sm-subtitle" id="sm-selected-date-label">Selecciona una fecha</div>
         <div id="sm-slots" class="sm-slots"></div>
       </div>
@@ -72,32 +79,81 @@
     </div>
   </div>
 <style>
+:root{
+  font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+.sm-logo-wrap{
+  text-align:center;
+  margin:16px 0;
+}
+.sm-logo{
+  max-width:120px;
+  width:100%;
+  height:auto;
+}
+body{
+  margin:0;
+  font-family:inherit;
+  -webkit-font-smoothing:antialiased;
+  background:#F5F5F7;
+}
+.sm-sched-wrap,
+.sm-sched-wrap *{
+  font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif !important;
+  -webkit-font-smoothing:antialiased;
+}
   .sm-sched-wrap{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:24px 0;}
   .sm-sched-card{max-width:960px;margin:0 auto;background:#fff;border-radius:18px;padding:24px 20px;box-shadow:0 10px 30px rgba(15,23,42,0.08);}
   .sm-title{margin:0 0 16px;font-size:24px;font-weight:700;color:#111827;}
   .sm-subtitle{font-size:14px;color:#6b7280;margin-bottom:6px;}
   .sm-row{margin-bottom:12px;}
   .sm-label{display:block;font-size:13px;color:#374151;margin-bottom:2px;}
-  .sm-input,.sm-select{width:100%;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db;font-size:14px;box-sizing:border-box;}
+  .sm-input,.sm-select{width:100%;padding:8px 10px;border-radius:10px;border:1px solid #d1d5db;font-size:14px;box-sizing:border-box;margin-top: 6px;}
   .sm-input:focus,.sm-select:focus{outline:none;border-color:#1f6feb;box-shadow:0 0 0 1px rgba(31,111,235,0.1);}
-  .sm-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:40px;margin-top:25px;}
-  @media(max-width:768px){.sm-grid{grid-template-columns:1fr;}}
+  .sm-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:40px;margin-top:25px;align-items:start;}
+  .sm-col{display:flex;flex-direction:column;gap:8px;min-height:100%;}
+  .sm-col-right{min-height:100%;}
+  @media(max-width:768px){
+    .sm-grid{grid-template-columns:1fr;}
+    .sm-col{min-height:auto;}
+  }
   .sm-cal{background:#f9fafb;border-radius:14px;border:1px solid #e5e7eb;padding:10px;}
   .sm-cal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
   .sm-cal-month{font-size:14px;font-weight:600;color:#111827;}
   .sm-cal-nav button{border:none;background:transparent;cursor:pointer;font-size:16px;padding:2px 6px;color:#6b7280;}
   .sm-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:11px;}
   .sm-cal-dow{text-align:center;font-weight:600;color:#9ca3af;padding:4px 0;}
-  .sm-cal-day{height:30px;display:flex;align-items:center;justify-content:center;border-radius:999px;font-size:12px;cursor:pointer;border:1px solid transparent;}
-  .sm-cal-day.disabled{cursor:not-allowed;color:#d1d5db;}
-  .sm-cal-day.available{color:#111827;background:#e5f0ff;border-color:#d0e2ff;}
+  .sm-cal-day{height:50px;display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:12px;cursor:pointer;border:1px solid transparent;}
+  .sm-cal-day.disabled{cursor:not-allowed;color:#d1d5db;background: #f9fafb;}
+  .sm-cal-day.available{color:#111827;background:#efeff0}
   .sm-cal-day.selected{background:#1f6feb;color:#fff;border-color:#1f6feb;}
-  .sm-slots{min-height:80px;display:flex;flex-wrap:wrap;gap:8px;}
-  .sm-slot-btn{border-radius:999px;border:1px solid #d1d5db;padding:6px 10px;font-size:12px;cursor:pointer;background:#fff;color:#111827;max-height: 30px;}
-  .sm-slot-btn.selected{background:#1f6feb;color:#fff;border-color:#1f6feb;}
+  .sm-slots{
+    min-height:80px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    overflow-y:auto;
+    padding: 0 24px 0 0;
+  }
+  .sm-slot-btn{
+    width:100%;
+    border-radius:7px;
+    border:1px solid #d1d5db91;
+    padding:11px 12px;
+    font-size:14px;
+    font-weight:500;
+    cursor:pointer;
+    background:#fff;
+    color:#111827;
+    text-align:center;
+    box-sizing:border-box;
+    transition:box-shadow .15s ease,border-color .15s ease,transform .12s ease;
+  }
+  .sm-slot-btn:hover{border-color:#a3a4a5;}
+  .sm-slot-btn.selected{border-color:#1f6feb;border: 2px solid #1f6feb;}
   .sm-slot-btn.disabled{opacity:0.5;cursor:not-allowed;}
-  .sm-form{margin-top:14px;border-top:1px solid #e5e7eb;padding-top:12px;}
-  .sm-btn-primary{margin-top:4px;width:100%;border:none;border-radius:999px;background:#1f6feb;color:#fff;font-size:14px;font-weight:600;padding:10px 12px;cursor:pointer;}
+  .sm-form{margin-top:14px;border-top:1px solid #e5e7eb;padding-top:25px;}
+  .sm-btn-primary{margin-top:4px;width:100%;border:none;border-radius:999px;background:#1f6feb;color:#fff;font-size:14px;font-weight:600;padding:15px 12px;cursor:pointer;}
   .sm-btn-primary:disabled{opacity:0.6;cursor:not-allowed;}
   .sm-toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;}
   .sm-toast.is-show{opacity:1;transform:translateX(-50%) translateY(-4px);}
@@ -190,7 +246,7 @@
   // - Este es el backend principal que recibe los datos del front.
   // - Nota: aunque copies el código a tu PC, esta URL sigue apuntando al despliegue en Google.
   // - Código fuente (copia local para editar/analizar con Codex): /apps-script/code.gs
-  const ENDPOINT = "https://script.google.com/macros/s/AKfycbxUBDt0k5-fAtLm9yVSSWmgVX3HqlqiJ0ADruTIdTkBbs86UZBjQmMkHJy4vOtuxexw/exec";
+  const ENDPOINT = "https://script.google.com/macros/s/AKfycbyJvUfgU2-i3RxZ3vHDfi2HKRf8YtIeA3_HJpqt88I_b8yj03pbUMH4dMPR9Z2eVQ91/exec";
 
   // ==== PERF / DEBUG (mantén como lo tienes) ====
   const DEBUG_PERF = true; // si lo tienes ya, déjalo como está
@@ -234,6 +290,26 @@
     return d2;
   }
 
+  function syncSlotsHeight(){
+    const cal = qs("#sm-calendar");
+    const slots = qs("#sm-slots");
+    if (!cal || !slots) return;
+
+    // En mobile dejamos altura automática
+    if (window.innerWidth <= 768){
+      slots.style.maxHeight = "";
+      slots.style.minHeight = "";
+      slots.style.height = "";
+      return;
+    }
+
+    const h = cal.offsetHeight || 0;
+    if (!h) return;
+    slots.style.height = h+"px";
+    slots.style.maxHeight = h+"px";
+    slots.style.minHeight = h+"px";
+  }
+
   // ==== Reload seguro ante errores de red/CORS ====
   function hardReload(){
     try{
@@ -251,13 +327,56 @@
   let state = {
     today: null,
     days_ahead_max: 90,
+    global_days_ahead_max: 90,
+    consultorLimits: {},
     selectedConsultor: "todos",
+    consultores: [],
     availableDays: {}, // { "YYYY-MM": [ "YYYY-MM-DD", ... ] }
     currentMonth: null, // Date (primer día del mes que se muestra)
     selectedDate: null, // "YYYY-MM-DD"
     selectedTime: null, // "HH:mm"
     bookingLocked: false
   };
+
+  function buildConsultorLimitsMap(consultores){
+    const map = {};
+    (consultores || []).forEach(c=>{
+      const cid = String(c.consultor_id || "").trim();
+      if (!cid) return;
+      const raw = c.days_ahead_limit;
+      if (raw === "" || raw === null || raw === undefined) return;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 1) return;
+      map[cid] = Math.floor(n);
+    });
+    return map;
+  }
+
+  function effectiveDaysAheadMax(){
+    const base = state.global_days_ahead_max || state.days_ahead_max || 90;
+    if (state.selectedConsultor === "todos"){
+      const activos = (state.consultores || []).filter(c => c.activo);
+      const limits = activos
+        .map(c => state.consultorLimits[c.consultor_id])
+        .filter(v => Number.isFinite(Number(v)) && Number(v) > 0)
+        .map(v => Math.floor(Number(v)));
+      if (limits.length && limits.length === activos.length){
+        const maxLim = Math.max(...limits);
+        return Math.min(base, maxLim);
+      }
+      return base;
+    }
+    if (state.selectedConsultor && state.selectedConsultor !== "todos"){
+      const lim = state.consultorLimits[state.selectedConsultor];
+      if (lim != null){
+        const n = Number(lim);
+        if (Number.isFinite(n) && n > 0){
+          return Math.min(base, Math.floor(n));
+        }
+      }
+    }
+    return base;
+  }
 
   // ==== Estilos skeleton (shimmer) solo una vez ====
   function ensureSkeletonStyles(){
@@ -383,7 +502,8 @@
 
     const today = new Date(state.today);
     const maxDate = new Date(today.getTime());
-    maxDate.setDate(maxDate.getDate()+state.days_ahead_max);
+    const cap = effectiveDaysAheadMax();
+    maxDate.setDate(maxDate.getDate()+Math.max(cap-1, 0));
     const maxMonth = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
 
     for (let i=1; i<=count; i++){
@@ -503,7 +623,8 @@
     btnNext.addEventListener("click", ()=>{
       const today = new Date(state.today);
       const maxDate = new Date(today.getTime());
-      maxDate.setDate(maxDate.getDate()+state.days_ahead_max);
+      const cap = effectiveDaysAheadMax();
+      maxDate.setDate(maxDate.getDate()+Math.max(cap-1, 0));
       const maxMonth = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
       const next = addMonths(state.currentMonth, 1);
       if (next > maxMonth) return;
@@ -520,6 +641,8 @@
           hardReload();
         });
     });
+
+    syncSlotsHeight();
   }
 
   // ==== Slots y formulario ====
@@ -555,6 +678,7 @@
       if (!slots.length){
         slotsWrap.textContent = "No hay horarios disponibles en esta fecha.";
         if (label) label.textContent = "Horarios para "+state.selectedDate;
+        syncSlotsHeight();
         const renderMs = Math.round(nowMs() - tRender0);
         if (DEBUG_PERF){
           perfLog("SLOTS PERF", {
@@ -586,6 +710,8 @@
         });
         slotsWrap.appendChild(btn);
       });
+
+      syncSlotsHeight();
 
       const renderMs = Math.round(nowMs() - tRender0);
       if (DEBUG_PERF){
@@ -651,28 +777,28 @@
     const sel = qs("#sm-consultor-select");
     if (!sel) return;
     sel.innerHTML = "";
+
+    const prefCid = String(preferredCid || "").trim();
+    const activos = (consultores || []).filter(c=>c.activo);
+    const prefConsultor = prefCid
+      ? activos.find(c => String(c.consultor_id || "").trim() === prefCid)
+      : null;
+    let prefValue = "";
+
+    if (prefConsultor){
+      prefValue = String(prefConsultor.consultor_id || "").trim();
+      const o = document.createElement("option");
+      o.value = prefValue;
+      o.textContent = prefValue;
+      sel.appendChild(o);
+    }
+
     const optAll = document.createElement("option");
     optAll.value = "todos";
     optAll.textContent = "Todos";
     sel.appendChild(optAll);
 
-    consultores.filter(c=>c.activo).forEach(c=>{
-      const o = document.createElement("option");
-      o.value = c.consultor_id;
-      o.textContent = c.consultor_id;
-      sel.appendChild(o);
-    });
-
-        const prefCid = String(preferredCid || "").trim();
-    let hasPref = false;
-
-    if (prefCid){
-      for (let i=0; i<sel.options.length; i++){
-        if (String(sel.options[i].value) === prefCid){ hasPref = true; break; }
-      }
-    }
-
-    sel.value = (hasPref ? prefCid : "todos");
+    sel.value = (prefConsultor ? prefValue : "todos");
     state.selectedConsultor = sel.value;
 
 
@@ -774,7 +900,10 @@
       if (!bootData.ok) throw new Error(bootData.error || "boot_error");
 
       state.today = bootData.init?.today || null;
-      state.days_ahead_max = bootData.init?.days_ahead_max || 90;
+      state.global_days_ahead_max = bootData.init?.days_ahead_max || 90;
+      state.days_ahead_max = state.global_days_ahead_max;
+      state.consultorLimits = buildConsultorLimitsMap(bootData.consultores || []);
+      state.consultores = bootData.consultores || [];
 
             const urlIdc = String(getParams().get("idc") || "").trim();
       buildConsultorSelect(bootData.consultores || [], urlIdc);
@@ -883,6 +1012,10 @@
           ? "Debe ser con 10 min de anticipación"
           : data.error === "slot_not_available"
           ? "Ese horario ya no está disponible"
+          : data.error === "too_far_consultor"
+          ? "La fecha está fuera del rango permitido para ese consultor"
+          : data.error === "no_consultor_for_date"
+          ? "No hay consultores disponibles para esa fecha"
           : "No se pudo agendar";
         toast(msg);
         return;
@@ -908,6 +1041,8 @@
       showLoader(false);
     }
   }
+
+  window.addEventListener("resize", syncSlotsHeight);
 
   document.addEventListener("DOMContentLoaded", ()=>{
     const form = qs("#sm-booking-form");

@@ -1,6 +1,6 @@
 /***** SimpleMarcas – Scheduler v1 (OPTIMIZADO + INDEX TURBO)
  * Hojas:
- * - Consultores: A:consultor_id, B:nombre, C:activo
+ * - Consultores: A:consultor_id, B:nombre, C:activo, D:days_ahead_limit (opcional)
  * - Horario: A:consultor_id, B:dow(1-7), C:enabled, D:start1, E:end1, F:start2, G:end2
  * - Bloqueos: A:fecha(yyyy-MM-dd), B:consultor_id|ALL, C:motivo
  * - Agendas: A:booking_id, B:fecha, C:hora, D:consultor_id,
@@ -114,6 +114,16 @@ function normBool_(val){
   return s === "true" || s === "1" || s === "sí" || s === "si";
 }
 
+function normDaysAheadInt_(val){
+  if (val === null || val === undefined) return null;
+  const s = String(val).trim();
+  if (!s) return null;
+  const n = Number(s);
+  if (!isFinite(n)) return null;
+  const i = Math.floor(n);
+  return i > 0 ? i : null;
+}
+
 function normDateStr_(cell){
   if (cell instanceof Date){
     return Utilities.formatDate(cell, CFG.TZ, "yyyy-MM-dd");
@@ -187,14 +197,19 @@ function getConsultores_(){
   const last = sh.getLastRow();
   const out = [];
   if (last < 2) return out;
-  const vals = sh.getRange(2,1,last-1,3).getValues();
+  const width = Math.max(4, sh.getLastColumn());
+  const vals = sh.getRange(2,1,last-1,width).getValues();
+  // asegurar header de la nueva columna sin romper setups existentes
+  if (!sh.getRange(1,4).getValue()) sh.getRange(1,4).setValue("days_ahead_limit");
   for (let i=0;i<vals.length;i++){
-    const [id, nombre, activo] = vals[i];
+    const [id, nombre, activo, daysAheadRaw] = vals[i];
+    const days_ahead_limit = normDaysAheadInt_(daysAheadRaw);
     if (!id) continue;
     out.push({
       consultor_id: String(id),
       nombre: nombre || "",
-      activo: normBool_(activo)
+      activo: normBool_(activo),
+      days_ahead_limit
     });
   }
   return out;
@@ -204,7 +219,8 @@ function setConsultorActive_(cid, active){
   const sh = getSheet_("Consultores");
   const last = sh.getLastRow();
   if (last < 2) return false;
-  const vals = sh.getRange(2,1,last-1,3).getValues();
+  const width = Math.max(4, sh.getLastColumn());
+  const vals = sh.getRange(2,1,last-1,width).getValues();
   for (let i=0;i<vals.length;i++){
     if (String(vals[i][0]) === String(cid)){
       sh.getRange(i+2, 3).setValue(!!active);
@@ -212,6 +228,45 @@ function setConsultorActive_(cid, active){
     }
   }
   return false;
+}
+
+function setConsultorDaysAhead_(cid, daysLimit){
+  const sh = getSheet_("Consultores");
+  const last = sh.getLastRow();
+  if (last < 2) return false;
+  const width = Math.max(4, sh.getLastColumn());
+  const vals = sh.getRange(2,1,last-1,width).getValues();
+  let found = false;
+  for (let i=0;i<vals.length;i++){
+    if (String(vals[i][0]).trim() === String(cid).trim()){
+      sh.getRange(i+2, 4).setValue(daysLimit == null ? "" : daysLimit);
+      found = true;
+      break;
+    }
+  }
+  if (!sh.getRange(1,4).getValue()) sh.getRange(1,4).setValue("days_ahead_limit");
+  return found;
+}
+
+function effectiveDaysCap_(rawLimit){
+  const n = normDaysAheadInt_(rawLimit);
+  const cap = (n == null) ? CFG.DAYS_AHEAD_MAX : Math.min(CFG.DAYS_AHEAD_MAX, n);
+  return cap < 1 ? 1 : cap;
+}
+
+function buildDaysAheadLimitMap_(consultores, todayD){
+  const map = {};
+  let maxCapDays = 0;
+  const base = todayD || parseDate_(todayDate_());
+  (consultores || []).forEach(c=>{
+    const cid = String(c.consultor_id || "").trim();
+    if (!cid) return;
+    const capDays = effectiveDaysCap_(c.days_ahead_limit);
+    const maxDate = addDays_(base, capDays - 1);
+    map[cid] = { capDays, maxDate };
+    if (capDays > maxCapDays) maxCapDays = capDays;
+  });
+  return { map, maxCapDays };
 }
 
 function ensureDefaultScheduleForConsultor_(cid){
@@ -630,6 +685,18 @@ function slotsTurbo_(consultor, dateStr){
   const t0 = perfStart_();
   perfMark_(perf, "slots_start", t0);
 
+  const todayStr = todayDate_();
+  const todayD = parseDate_(todayStr);
+  const targetDate = parseDate_(dateStr);
+  if (!targetDate){
+    perfMark_(perf, "slots_after_blocks", t0);
+    perfMark_(perf, "slots_after_booked", t0);
+    perfMark_(perf, "slots_after_horario", t0);
+    perfMark_(perf, "slots_after_compute", t0);
+    perf.total_ms = perf.slots_after_compute;
+    return { ok:false, error:"invalid_date", slots:[], _perf: perf };
+  }
+
   const blocks = buildBlocksForDate_(dateStr);
   perfMark_(perf, "slots_after_blocks", t0);
 
@@ -643,9 +710,23 @@ function slotsTurbo_(consultor, dateStr){
       return { ok:false, error:"missing_consultor", slots:[], _perf: perf };
     }
 
+    const consultores = getConsultores_();
+    const consultorObj = consultores.find(c => c.activo && String(c.consultor_id || "").trim() === cid);
+    const { map: limitsMap } = buildDaysAheadLimitMap_([consultorObj || {}], todayD);
+    const limitInfo = limitsMap[cid];
+    const capDays = limitInfo ? limitInfo.capDays : CFG.DAYS_AHEAD_MAX;
+    const maxAllowedDate = limitInfo ? limitInfo.maxDate : addDays_(todayD, Math.max(capDays,1) - 1);
+
     // booked desde index (1 búsqueda por key)
     const bookedByCid = getBookedFromIndex_(dateStr, [cid]);
     perfMark_(perf, "slots_after_booked", t0);
+
+    if (targetDate > maxAllowedDate){
+      perfMark_(perf, "slots_after_horario", t0);
+      perfMark_(perf, "slots_after_compute", t0);
+      perf.total_ms = perf.slots_after_compute;
+      return { ok:true, consultor: cid, date: dateStr, slots:[], _perf: perf };
+    }
 
     if (blocks.all || blocks.byCid[cid]){
       perfMark_(perf, "slots_after_horario", t0);
@@ -657,13 +738,7 @@ function slotsTurbo_(consultor, dateStr){
     const schedBulk = buildScheduleBulk_([cid]);
     perfMark_(perf, "slots_after_horario", t0);
 
-    const d = parseDate_(dateStr);
-    if (!d){
-      perfMark_(perf, "slots_after_compute", t0);
-      perf.total_ms = perf.slots_after_compute;
-      return { ok:false, error:"invalid_date", slots:[], _perf: perf };
-    }
-    let dow = d.getDay(); dow = (dow === 0 ? 7 : dow);
+    let dow = targetDate.getDay(); dow = (dow === 0 ? 7 : dow);
     const dayCfg = (schedBulk[cid] || {})[dow];
     const slots = generateSlotsFromCfg_(dateStr, dayCfg, bookedByCid[cid]);
     perfMark_(perf, "slots_after_compute", t0);
@@ -684,6 +759,16 @@ function slotsTurbo_(consultor, dateStr){
     return { ok:true, consultor:"todos", date: dateStr, slots:[], _perf: perf };
   }
 
+  const { map: limitsMap, maxCapDays } = buildDaysAheadLimitMap_(consultoresActivos, todayD);
+  const unionMaxDate = addDays_(todayD, (maxCapDays || CFG.DAYS_AHEAD_MAX) - 1);
+  if (targetDate > unionMaxDate){
+    perfMark_(perf, "slots_after_booked", t0);
+    perfMark_(perf, "slots_after_horario", t0);
+    perfMark_(perf, "slots_after_compute", t0);
+    perf.total_ms = perf.slots_after_compute;
+    return { ok:true, consultor:"todos", date: dateStr, slots:[], _perf: perf };
+  }
+
   const cids = consultoresActivos.map(c => String(c.consultor_id).trim());
 
   // booked desde index (1 búsqueda por key por consultor activo)
@@ -693,17 +778,13 @@ function slotsTurbo_(consultor, dateStr){
   const schedBulk = buildScheduleBulk_(cids);
   perfMark_(perf, "slots_after_horario", t0);
 
-  const d = parseDate_(dateStr);
-  if (!d){
-    perfMark_(perf, "slots_after_compute", t0);
-    perf.total_ms = perf.slots_after_compute;
-    return { ok:false, error:"invalid_date", slots:[], _perf: perf };
-  }
-  let dow = d.getDay(); dow = (dow === 0 ? 7 : dow);
+  let dow = targetDate.getDay(); dow = (dow === 0 ? 7 : dow);
 
   const union = {};
   for (let i=0;i<cids.length;i++){
     const cid = cids[i];
+    const lim = limitsMap[cid];
+    if (lim && targetDate > lim.maxDate) continue;
     if (blocks.byCid[cid]) continue;
     const dayCfg = (schedBulk[cid] || {})[dow];
     const arr = generateSlotsFromCfg_(dateStr, dayCfg, bookedByCid[cid]);
@@ -727,8 +808,8 @@ function availableDaysTurboResult_(consultor, fromStrParam, toStrParam, today){
   const toDParam   = parseDate_(toStrParam)   || addDays_(fromDParam, CFG.DAYS_AHEAD_MAX);
 
   const todayD = parseDate_(today);
-  const maxTo  = addDays_(todayD, CFG.DAYS_AHEAD_MAX);
-  const realTo = (toDParam > maxTo ? maxTo : toDParam);
+  const maxToGlobal  = addDays_(todayD, CFG.DAYS_AHEAD_MAX);
+  let realTo = (toDParam > maxToGlobal ? maxToGlobal : toDParam);
 
   const fromDClamped = fromDParam < todayD ? todayD : fromDParam;
   if (fromDClamped > realTo){
@@ -741,13 +822,6 @@ function availableDaysTurboResult_(consultor, fromStrParam, toStrParam, today){
     _perf.total_ms = Date.now() - t0;
     return { ok:true, dates: [], _perf };
   }
-
-  const fromStr = dateToStr_(fromDClamped);
-  const toStr   = dateToStr_(realTo);
-
-  perfMark_(_perf, "availableDays_before_blocks", t0);
-  const blockedMap = buildBlockedMap_(fromStr, toStr);
-  perfMark_(_perf, "availableDays_after_blocks", t0);
 
   const outDates = [];
 
@@ -763,7 +837,18 @@ function availableDaysTurboResult_(consultor, fromStrParam, toStrParam, today){
       return { ok:true, dates: [], _perf };
     }
 
+    const { map: limitsMap, maxCapDays } = buildDaysAheadLimitMap_(consultoresActivos, todayD);
+    const unionMaxDate = addDays_(todayD, (maxCapDays || CFG.DAYS_AHEAD_MAX) - 1);
+    if (realTo > unionMaxDate) realTo = unionMaxDate;
+
     const cids = consultoresActivos.map(c => String(c.consultor_id).trim());
+
+    const fromStr = dateToStr_(fromDClamped);
+    const toStr   = dateToStr_(realTo);
+
+    perfMark_(_perf, "availableDays_before_blocks", t0);
+    const blockedMap = buildBlockedMap_(fromStr, toStr);
+    perfMark_(_perf, "availableDays_after_blocks", t0);
 
     perfMark_(_perf, "availableDays_before_horario", t0);
     const schedBulk = buildScheduleBulk_(cids); // <- 1 sola lectura Horario
@@ -795,6 +880,8 @@ function availableDaysTurboResult_(consultor, fromStrParam, toStrParam, today){
       let anyAvailable = false;
       for (let i=0; i<cids.length && !anyAvailable; i++){
         const cid = cids[i];
+        const lim = limitsMap[cid];
+        if (lim && d > lim.maxDate) continue;
         const theoretical = slotsPerConsultorDow[cid][dow] || 0;
         if (theoretical <= 0) continue;
         if (blockedMap.byKey[ds + "||" + cid]) continue;
@@ -810,15 +897,33 @@ function availableDaysTurboResult_(consultor, fromStrParam, toStrParam, today){
     const cid = String(consultor || "").trim();
 
     perfMark_(_perf, "availableDays_before_consultores", t0);
-    const okCid = getConsultores_().some(c => c.activo && String(c.consultor_id).trim() === cid);
+    const consultores = getConsultores_();
+    const consultorObj = consultores.find(c => c.activo && String(c.consultor_id).trim() === cid);
     perfMark_(_perf, "availableDays_after_consultores", t0);
 
-    if (!okCid){
+    if (!consultorObj){
       perfMark_(_perf, "availableDays_before_horario", t0);
       perfMark_(_perf, "availableDays_after_horario", t0);
       _perf.total_ms = Date.now() - t0;
       return { ok:true, dates: [], _perf };
     }
+
+    const { map: limitsMap } = buildDaysAheadLimitMap_([consultorObj], todayD);
+    const lim = limitsMap[cid] || { maxDate: maxToGlobal };
+    if (realTo > lim.maxDate) realTo = lim.maxDate;
+    if (fromDClamped > realTo){
+      perfMark_(_perf, "availableDays_before_horario", t0);
+      perfMark_(_perf, "availableDays_after_horario", t0);
+      _perf.total_ms = Date.now() - t0;
+      return { ok:true, dates: [], _perf };
+    }
+
+    const fromStr = dateToStr_(fromDClamped);
+    const toStr   = dateToStr_(realTo);
+
+    perfMark_(_perf, "availableDays_before_blocks", t0);
+    const blockedMap = buildBlockedMap_(fromStr, toStr);
+    perfMark_(_perf, "availableDays_after_blocks", t0);
 
     perfMark_(_perf, "availableDays_before_horario", t0);
     const schedBulk = buildScheduleBulk_([cid]); // <- 1 lectura
@@ -1155,14 +1260,16 @@ function doPost(e){
     const sh = getSheet_("Consultores");
     const last = sh.getLastRow();
     if (last >= 2){
-      const vals = sh.getRange(2,1,last-1,3).getValues();
+      const width = Math.max(4, sh.getLastColumn());
+      const vals = sh.getRange(2,1,last-1,width).getValues();
       for (let i=0;i<vals.length;i++){
         if (String(vals[i][0]).trim() === cid){
           return json_({ ok:false, error:"duplicate_consultor_id" });
         }
       }
     }
-    sh.appendRow([cid, nombre || ("Consultor "+cid), true]);
+    sh.getRange(sh.getLastRow()+1,1,1,4).setValues([[cid, nombre || ("Consultor "+cid), true, ""]]);
+    if (!sh.getRange(1,4).getValue()) sh.getRange(1,4).setValue("days_ahead_limit");
     ensureDefaultScheduleForConsultor_(cid); // <- aquí sí (una sola vez)
     return json_({ ok:true, consultor_id: cid });
   }
@@ -1185,7 +1292,9 @@ function doPost(e){
     }catch(_){
       return json_({ ok:false, error:"invalid_days" });
     }
+    const daysLimit = normDaysAheadInt_(p.days_ahead_limit);
     saveScheduleForConsultor_(cid, days);
+    setConsultorDaysAhead_(cid, daysLimit);
     return json_({ ok:true });
   }
 
@@ -1215,7 +1324,6 @@ function doPost(e){
     const todayD = parseDate_(todayDate_());
     const diff = diffDays_(todayD, d);
     if (diff < 0) return json_({ ok:false, error:"past_date" });
-    if (diff > CFG.DAYS_AHEAD_MAX) return json_({ ok:false, error:"too_far" });
 
     if (diff === 0){
       const nowM = timeToMinutes_(nowTime_());
@@ -1225,6 +1333,19 @@ function doPost(e){
     const consultoresActivos = getConsultores_().filter(c => c.activo);
     if (!consultoresActivos.length) return json_({ ok:false, error:"no_consultores" });
 
+    const { map: limitMap } = buildDaysAheadLimitMap_(consultoresActivos, todayD);
+    const capForConsultor = (cid)=>{
+      const lim = limitMap[cid];
+      return lim ? lim.capDays : CFG.DAYS_AHEAD_MAX;
+    };
+
+    if (consultor !== "todos"){
+      const exists = consultoresActivos.some(c => String(c.consultor_id).trim() === consultor);
+      if (!exists) return json_({ ok:false, error:"invalid_consultor" });
+      const capDays = capForConsultor(consultor);
+      if (diff > capDays - 1) return json_({ ok:false, error:"too_far_consultor" });
+    }
+
     let assignedConsultor = null;
 
     if (consultor !== "todos"){
@@ -1233,10 +1354,17 @@ function doPost(e){
       if (!res.ok) return json_(res);
       if ((res.slots || []).indexOf(hora) === -1) return json_({ ok:false, error:"slot_not_available" });
     } else {
+      const elegibles = consultoresActivos.filter(c=>{
+        const cid = String(c.consultor_id || "").trim();
+        const capDays = capForConsultor(cid);
+        return diff <= (capDays - 1);
+      });
+      if (!elegibles.length) return json_({ ok:false, error:"no_consultor_for_date" });
+
       // candidatos: consultores donde ese horario esté disponible (usando turbo por consultor)
       const candidates = [];
-      for (let i=0;i<consultoresActivos.length;i++){
-        const cid = String(consultoresActivos[i].consultor_id || "").trim();
+      for (let i=0;i<elegibles.length;i++){
+        const cid = String(elegibles[i].consultor_id || "").trim();
         const res = slotsTurbo_(cid, fecha);
         if (!res.ok) continue;
         if ((res.slots || []).indexOf(hora) !== -1) candidates.push(cid);

@@ -4,10 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex,nofollow" />
+  <link rel="icon" href="files/favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <title>Admin</title>
 </head>
 <body>
 
+<div class="sm-logo-wrap">
+  <img class="sm-logo" src="files/logon.png" alt="Logo">
+</div>
 <div class="sm-admin-wrap">
   <!-- Login -->
   <div id="sm-admin-login" class="sm-admin-card">
@@ -91,6 +98,8 @@
             <button id="sm-btn-unblock" class="sm-btn-secondary" type="button">Desbloquear</button>
           </div>
         </div>
+        <div class="sm-subtitle sm-block-title">Fechas bloqueadas</div>
+        <div id="sm-block-list" class="sm-block-list"></div>
         <!-- Edición horario de cada consultor -->
         <hr style="margin:18px 0; border:none;border-top:1px solid #e5e7eb;">
         <h3 class="sm-subtitle">Horarios de consultor</h3>
@@ -105,6 +114,15 @@
           </div>
         </div>
         <div id="sm-hor-grid" class="sm-hor-grid"></div>
+        <div class="sm-hor-meta">
+          <label class="sm-label" for="sm-hor-days-ahead">Máximo de días a futuro</label>
+          <div class="sm-hor-meta-row">
+            <input id="sm-hor-days-ahead" class="sm-input sm-input-inline" type="number" min="1" placeholder="Sin restricción">
+            <div class="sm-hor-meta-hint">
+              Deja en blanco para sin restricción. Se calcula por medianoche (1 = solo hoy, 2 = hoy y mañana, etc.).
+            </div>
+          </div>
+        </div>
         <div style="margin-top:10px;display:flex;justify-content:flex-start;">
           <button id="sm-hor-save" class="sm-btn-secondary" type="button">Guardar horarios</button>
         </div>
@@ -179,6 +197,24 @@
   </div>
 </div>
 <style>
+:root{
+  font-family:'Inter',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+.sm-logo-wrap{
+  text-align:center;
+  margin:16px 0;
+}
+.sm-logo{
+  max-width:120px;
+  width:100%;
+  height:auto;
+}
+body{
+  margin:0;
+  font-family:inherit;
+  -webkit-font-smoothing:antialiased;
+  background:#F5F5F7;
+}
     /* ===== Base Admin ===== */
 .sm-admin-wrap{
   font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -624,6 +660,24 @@
   padding:10px;
 }
 
+.sm-hor-meta{
+  margin-top:12px;
+}
+.sm-hor-meta-row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px;
+}
+.sm-input-inline{
+  max-width:180px;
+}
+.sm-hor-meta-hint{
+  font-size:12px;
+  color:#6b7280;
+  line-height:1.4;
+}
+
 .sm-hor-row{
   display:grid;
   grid-template-columns:90px minmax(0,1fr);
@@ -727,6 +781,66 @@
 
 
 
+
+/* ===== Bloqueo de fechas (listado) ===== */
+.sm-block-title{
+  margin-top:10px;
+}
+
+.sm-block-list{
+  border-radius:14px;
+  border:1px solid #e5e7eb;
+  background:#f9fafb;
+  padding:8px;
+  font-size:13px;
+  margin-top:10px;
+}
+
+.sm-block-row{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:flex-start;
+  padding:6px 8px;
+  border-radius:10px;
+}
+
+.sm-block-row:nth-child(odd){
+  background:#ffffff;
+}
+
+.sm-block-info{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+
+.sm-block-date{
+  font-weight:600;
+  color:#111827;
+}
+
+.sm-block-consultor{
+  font-size:12px;
+  color:#374151;
+}
+
+.sm-block-motivo{
+  font-size:12px;
+  color:#6b7280;
+  word-break:break-word;
+}
+
+.sm-block-delete-btn{
+  border:none;
+  border-radius:999px;
+  padding:4px 10px;
+  font-size:11px;
+  cursor:pointer;
+  background:#fee2e2;
+  color:#b91c1c;
+}
 
 /* ===== Listado de consultores (eliminar) ===== */
 .sm-cons-list{
@@ -849,7 +963,7 @@
   // - Este es el backend principal que recibe los datos del front.
   // - Nota: aunque copies el código a tu PC, esta URL sigue apuntando al despliegue en Google.
   // - Código fuente (copia local para editar/analizar con Codex): /apps-script/code.gs
-  const ENDPOINT = "https://script.google.com/macros/s/AKfycbxUBDt0k5-fAtLm9yVSSWmgVX3HqlqiJ0ADruTIdTkBbs86UZBjQmMkHJy4vOtuxexw/exec";
+  const ENDPOINT = "https://script.google.com/macros/s/AKfycbyJvUfgU2-i3RxZ3vHDfi2HKRf8YtIeA3_HJpqt88I_b8yj03pbUMH4dMPR9Z2eVQ91/exec";
 
   const ADMIN_USER = "admin";
   const ADMIN_PASS = "consultores#5";
@@ -866,12 +980,21 @@
     inited: false,
     today: null,
     days_ahead_max: 90,
+    global_days_ahead_max: 90,
     consultorId: null,
     currentMonth: null,
     availableDays: {},
     selectedDate: null,
     selectedTime: null
   };
+
+  function consultorCapDays(cid){
+    const base = rpState.global_days_ahead_max || 90;
+    const c = getConsultorById(cid);
+    const raw = c && c.days_ahead_limit != null ? Number(c.days_ahead_limit) : null;
+    if (raw == null || !Number.isFinite(raw) || raw < 1) return base;
+    return Math.min(base, Math.floor(raw));
+  }
 
   // ===== Helpers básicos =====
   function toast(msg, ms=1800){
@@ -954,6 +1077,12 @@
     return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
   }
 
+  function formatDateDDMMYYYY(ymd){
+    const p = String(ymd || "").split("-");
+    if (p.length === 3 && p[0].length === 4) return [p[2], p[1], p[0]].join("-");
+    return ymd || "";
+  }
+
   function normTime(hhmm){
     if (!hhmm) return "";
     const p = String(hhmm).split(":");
@@ -1014,6 +1143,16 @@
     const url = ENDPOINT+"?mode=init_booking&_="+Date.now();
     const res = await fetch(url, {cache:"no-store"});
     if (!res.ok) throw new Error("init_booking "+res.status);
+    return res.json();
+  }
+
+  async function apiListBlocks(consultor_id){
+    const cid = consultor_id || "ALL";
+    const url = ENDPOINT+"?mode=blocks"
+      +"&consultor="+encodeURIComponent(cid)
+      +"&_="+Date.now();
+    const res = await fetch(url, { cache:"no-store" });
+    if (!res.ok) throw new Error("blocks "+res.status);
     return res.json();
   }
 
@@ -1099,11 +1238,12 @@
     return res.json();
   }
 
-  async function apiSaveSchedule(consultor_id, schedule){
+  async function apiSaveSchedule(consultor_id, schedule, daysAheadLimit){
     const body = new URLSearchParams();
     body.append("mode","saveSchedule");
     body.append("consultor_id", consultor_id);
     body.append("days", JSON.stringify(schedule));
+    body.append("days_ahead_limit", daysAheadLimit == null ? "" : daysAheadLimit);
     const res = await fetch(ENDPOINT, { method:"POST", body });
     if (!res.ok) throw new Error("saveSchedule "+res.status);
     return res.json();
@@ -1226,12 +1366,33 @@
     }
   }
 
+  function getConsultorById(cid){
+    return (gConsultores || []).find(c => String(c.consultor_id || "").trim() === String(cid || "").trim());
+  }
+
+  function formatConsultorLabel(cid){
+    if (!cid) return "";
+    if (cid === "ALL") return "Todos";
+    const c = getConsultorById(cid);
+    const nombre = c && c.nombre ? " – "+c.nombre : "";
+    return cid + nombre;
+  }
+
+  function syncDaysAheadInput(cid){
+    const input = qs("#sm-hor-days-ahead");
+    if (!input) return;
+    const c = getConsultorById(cid);
+    const val = (c && c.days_ahead_limit != null) ? c.days_ahead_limit : "";
+    input.value = val === null ? "" : val;
+  }
+
   async function loadScheduleForSelectedConsultor(){
     const sel = qs("#sm-hor-consultor");
     const grid = qs("#sm-hor-grid");
     if (!sel || !grid) return;
 
     const cid = sel.value;
+    syncDaysAheadInput(cid);
     if (!cid){
       grid.innerHTML = "Selecciona un consultor.";
       return;
@@ -1261,6 +1422,20 @@
     if (!cid){
       toast("Selecciona un consultor");
       return;
+    }
+
+    const inputDays = qs("#sm-hor-days-ahead");
+    let daysLimit = null;
+    if (inputDays){
+      const raw = (inputDays.value || "").trim();
+      if (raw){
+        const n = Number(raw);
+        if (!Number.isFinite(n) || n < 1){
+          toast("Días máximos debe ser un número mayor a 0");
+          return;
+        }
+        daysLimit = Math.floor(n);
+      }
     }
 
     const rows = [];
@@ -1305,8 +1480,12 @@
 
     showLoader(true);
     try{
-      const res = await apiSaveSchedule(cid, rows);
+      const res = await apiSaveSchedule(cid, rows, daysLimit);
       if (!res.ok) throw new Error(res.error || "saveSchedule_error");
+      const c = getConsultorById(cid);
+      if (c){
+        c.days_ahead_limit = daysLimit;
+      }
       toast("Horarios guardados");
     }catch(err){
       console.error(err);
@@ -1419,6 +1598,10 @@
           ? "Ese horario se ocupó justo ahora con ese consultor."
           : data.error === "too_soon"
           ? "La hora no cumple la regla de anticipación."
+          : data.error === "too_far_consultor"
+          ? "Esa fecha está fuera del rango permitido para ese consultor."
+          : data.error === "no_consultor_for_date"
+          ? "No hay consultores disponibles para esa fecha."
           : "No se pudo reasignar.";
         toast(msg);
         return;
@@ -1563,7 +1746,7 @@
     btnNext.addEventListener("click", ()=>{
       const today = new Date(rpState.today);
       const maxDate = new Date(today.getTime());
-      maxDate.setDate(maxDate.getDate() + rpState.days_ahead_max);
+      maxDate.setDate(maxDate.getDate() + Math.max(rpState.days_ahead_max - 1, 0));
       const maxMonth = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
       const next = new Date(rpState.currentMonth.getFullYear(), rpState.currentMonth.getMonth()+1, 1);
       if (next > maxMonth) return;
@@ -1639,9 +1822,12 @@
         const init = await apiInitBooking();
         if (!init.ok) throw new Error(init.error || "init_booking_error");
         rpState.today = init.today;
+        rpState.global_days_ahead_max = init.days_ahead_max || 90;
         rpState.days_ahead_max = init.days_ahead_max || 90;
         rpState.inited = true;
       }
+
+      rpState.days_ahead_max = consultorCapDays(rpState.consultorId);
 
       const todayDate = new Date(rpState.today);
       rpState.currentMonth = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1);
@@ -1679,6 +1865,10 @@
           ? "Ese horario se ocupó justo ahora."
           : data.error === "too_soon"
           ? "La hora no cumple la regla de anticipación."
+          : data.error === "too_far_consultor"
+          ? "Esa fecha está fuera del rango permitido para el consultor."
+          : data.error === "no_consultor_for_date"
+          ? "No hay consultores disponibles para esa fecha."
           : "No se pudo reprogramar.";
         toast(msg);
         return;
@@ -1918,6 +2108,12 @@
 
     if (selHor){
       selHor.innerHTML = "";
+      const prevValue = selHor.value || "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Selecciona un consultor";
+      selHor.appendChild(placeholder);
+
       const activos = consultores.filter(c=>c.activo);
 
       if (activos.length){
@@ -1927,13 +2123,16 @@
           o.textContent = c.consultor_id+" – "+(c.nombre || "Consultor");
           selHor.appendChild(o);
         });
-        selHor.value = activos[0].consultor_id;
+        if (prevValue && activos.some(c=>c.consultor_id === prevValue)){
+          selHor.value = prevValue;
+        } else {
+          selHor.value = "";
+        }
         loadScheduleForSelectedConsultor();
       } else {
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = "Sin consultores activos";
-        selHor.appendChild(opt);
+        placeholder.textContent = "Sin consultores activos";
+        selHor.value = "";
+        loadScheduleForSelectedConsultor();
       }
     }
   }
@@ -1999,6 +2198,94 @@
     });
   }
 
+  function renderBlockList(blocks){
+    const wrap = qs("#sm-block-list");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+
+    if (!blocks || !blocks.length){
+      wrap.textContent = "No hay fechas bloqueadas.";
+      return;
+    }
+
+    const sorted = [...blocks].sort((a,b)=>{
+      if (a.fecha === b.fecha){
+        return String(a.consultor_id || "").localeCompare(String(b.consultor_id || ""));
+      }
+      return String(a.fecha || "").localeCompare(String(b.fecha || ""));
+    });
+
+    sorted.forEach(b=>{
+      const row = document.createElement("div");
+      row.className = "sm-block-row";
+
+      const info = document.createElement("div");
+      info.className = "sm-block-info";
+
+      const fechaEl = document.createElement("div");
+      fechaEl.className = "sm-block-date";
+      fechaEl.textContent = formatDateDDMMYYYY(b.fecha);
+
+      const consEl = document.createElement("div");
+      consEl.className = "sm-block-consultor";
+      consEl.textContent = "Consultor: " + formatConsultorLabel(b.consultor_id || "ALL");
+
+      info.append(fechaEl, consEl);
+
+      const motivo = String(b.motivo || "").trim();
+      if (motivo){
+        const motEl = document.createElement("div");
+        motEl.className = "sm-block-motivo";
+        motEl.textContent = "Motivo: " + motivo;
+        info.appendChild(motEl);
+      }
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "sm-block-delete-btn";
+      btn.textContent = "Eliminar";
+      btn.addEventListener("click", async ()=>{
+        const cid = b.consultor_id || "ALL";
+        const confirmMsg = "¿Quitar bloqueo del "+formatDateDDMMYYYY(b.fecha)+" para "+formatConsultorLabel(cid)+"?";
+        if (!confirm(confirmMsg)) return;
+
+        showLoader(true);
+        try{
+          const res = await apiUnblockDate(b.fecha, cid);
+          if (!res.ok) throw new Error(res.error || "unblock_error");
+          toast("Bloqueo eliminado");
+          await loadBlockList(false);
+          reloadBookings();
+        }catch(err){
+          console.error(err);
+          toast("Error al eliminar bloqueo");
+        }finally{
+          showLoader(false);
+        }
+      });
+
+      row.append(info, btn);
+      wrap.appendChild(row);
+    });
+  }
+
+  async function loadBlockList(withLoader = true){
+    const sel = qs("#sm-block-consultor");
+    const cid = sel?.value || "ALL";
+
+    if (withLoader) showLoader(true);
+    try{
+      const data = await apiListBlocks(cid);
+      if (!data.ok) throw new Error(data.error || "blocks_error");
+      renderBlockList(data.blocks || []);
+    }catch(err){
+      console.error(err);
+      toast("Error al cargar bloqueos");
+    }finally{
+      if (withLoader) showLoader(false);
+    }
+  }
+
   async function initAdmin(){
     showLoader(true);
     try{
@@ -2011,6 +2298,7 @@
 
       buildConsultorSelects(gConsultores);
       renderConsultorList(gConsultores);
+      await loadBlockList(false);
       await reloadBookings();
     }catch(err){
       console.error(err);
@@ -2051,8 +2339,10 @@
 
     const dateInput = qs("#sm-admin-date");
     const selCons   = qs("#sm-admin-consultor");
+    const selBlock  = qs("#sm-block-consultor");
     if (dateInput) dateInput.addEventListener("change", reloadBookings);
     if (selCons)   selCons.addEventListener("change", reloadBookings);
+    if (selBlock)  selBlock.addEventListener("change", ()=> loadBlockList());
 
     const btnBlock = qs("#sm-btn-block");
     const btnUnblock = qs("#sm-btn-unblock");
@@ -2069,6 +2359,7 @@
           const res = await apiBlockDate(fecha, consultor_id, motivo);
           if (!res.ok) throw new Error(res.error || "block_error");
           toast("Fecha bloqueada");
+          await loadBlockList(false);
           reloadBookings();
         }catch(err){
           console.error(err);
@@ -2090,6 +2381,7 @@
           const res = await apiUnblockDate(fecha, consultor_id);
           if (!res.ok) throw new Error(res.error || "unblock_error");
           toast("Fecha desbloqueada");
+          await loadBlockList(false);
           reloadBookings();
         }catch(err){
           console.error(err);
